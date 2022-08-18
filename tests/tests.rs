@@ -33,7 +33,6 @@ macro_rules! num_test {
             42 as $T,
             [1 as $T, 2 as $T, 3 as $T],
             vec![1 as $T, 2 as $T, 3 as $T],
-            Vec::<$T>::new(),
             Box::new(42 as $T),
             Box::new([1 as $T, 2 as $T, 3 as $T]),
             Box::new([1 as $T, 2 as $T, 3 as $T]) as Box<[$T]>,
@@ -53,7 +52,6 @@ fn bool() -> Result<(), Box<dyn Error>> {
         true,
         [true, false],
         vec![true, false],
-        Vec::<bool>::new(),
         Box::new(true),
         Box::new([true, false]),
         Box::new([true, false]) as Box<[bool]>,
@@ -68,7 +66,6 @@ fn char() -> Result<(), Box<dyn Error>> {
         'A',
         ['A', 'B', 'C'],
         vec!['A', 'B', 'C'],
-        Vec::<char>::new(),
         Box::new('A'),
         Box::new(['A', 'B', 'C']),
         Box::new(['A', 'B', 'C']) as Box<[char]>,
@@ -83,8 +80,19 @@ fn string() -> Result<(), Box<dyn Error>> {
         "String test".to_owned(),
         ["foo".to_owned(), "bar".to_owned()],
         vec!["vec".to_owned(), "str".to_owned()],
-        Vec::<String>::new(),
         Box::<str>::from("str in the box!"),
+    );
+
+    Ok(())
+}
+
+#[test]
+fn empty() -> Result<(), Box<dyn Error>> {
+    rw_test_values!(
+        [] as [u32; 0],
+        Vec::<u32>::new(),
+        Box::new([]) as Box<[u32]>,
+        String::new(),
     );
 
     Ok(())

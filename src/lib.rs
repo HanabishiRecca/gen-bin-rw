@@ -124,6 +124,11 @@ impl WriteBin for String {
 impl<T: ReadBin + 'static> ReadBin for Vec<T> {
     fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
         let len = u32::read_bin(from)? as usize;
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
         let mut vec = Vec::with_capacity(len);
 
         if is_byte::<T>() {
@@ -149,6 +154,11 @@ impl<T: WriteBin + 'static> WriteBin for Vec<T> {
 
 impl<T: ReadBin + 'static, const N: usize> ReadBin for [T; N] {
     fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
+        if N == 0 {
+            // SAFETY: The length is 0, no initialization required.
+            return Ok(unsafe { MaybeUninit::uninit().assume_init() });
+        }
+
         // SAFETY: The array elements are `MaybeUninit`s, which do not require initialization.
         let mut arr: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
 
@@ -170,6 +180,10 @@ impl<T: ReadBin + 'static, const N: usize> ReadBin for [T; N] {
 
 impl<T: WriteBin + 'static, const N: usize> WriteBin for [T; N] {
     fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+        if N == 0 {
+            return Ok(());
+        }
+
         if is_byte::<T>() {
             // SAFETY: We know that `T` is `u8` or `i8` so can safely reinterpret.
             to.write_all(unsafe { transmute(value.as_slice()) })?;
