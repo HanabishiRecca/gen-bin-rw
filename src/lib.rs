@@ -6,18 +6,18 @@ use std::{
     str,
 };
 
-type GenErr = Box<dyn Error>;
+type GResult<T> = Result<T, Box<dyn Error>>;
 
 pub trait ReadBin: Sized {
-    fn read_bin(from: &mut impl Read) -> Result<Self, GenErr>;
+    fn read_bin(from: &mut impl Read) -> GResult<Self>;
 }
 
 pub trait ReadBinBox {
-    fn read_bin_box(from: &mut impl Read) -> Result<Box<Self>, GenErr>;
+    fn read_bin_box(from: &mut impl Read) -> GResult<Box<Self>>;
 }
 
 pub trait WriteBin {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr>;
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()>;
 }
 
 fn is_byte<T: 'static>() -> bool {
@@ -27,7 +27,7 @@ fn is_byte<T: 'static>() -> bool {
 macro_rules! num_rw_impl {
     ($($SelfT:ty),+ $(,)?) => {$(
         impl ReadBin for $SelfT {
-            fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
+            fn read_bin(from: &mut impl Read) -> GResult<Self> {
                 let mut buf = [0; size_of::<Self>()];
                 from.read_exact(buf.as_mut_slice())?;
                 Ok(Self::from_le_bytes(buf))
@@ -35,7 +35,7 @@ macro_rules! num_rw_impl {
         }
 
         impl WriteBin for $SelfT {
-            fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+            fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
                 Ok(to.write_all(Self::to_le_bytes(*value).as_slice())?)
             }
         }
@@ -45,38 +45,38 @@ macro_rules! num_rw_impl {
 num_rw_impl!(isize, usize, u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, f32, f64);
 
 impl ReadBin for bool {
-    fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
+    fn read_bin(from: &mut impl Read) -> GResult<Self> {
         Ok(u8::read_bin(from)? > 0)
     }
 }
 
 impl WriteBin for bool {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         let value = if *value { 1 } else { 0 };
         u8::write_bin(&value, to)
     }
 }
 
 impl ReadBin for char {
-    fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
+    fn read_bin(from: &mut impl Read) -> GResult<Self> {
         Ok(char::try_from(u32::read_bin(from)?)?)
     }
 }
 
 impl WriteBin for char {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         u32::write_bin(&(*value as u32), to)
     }
 }
 
 impl<T: ReadBin + 'static> ReadBinBox for [T] {
-    fn read_bin_box(from: &mut impl Read) -> Result<Box<Self>, GenErr> {
+    fn read_bin_box(from: &mut impl Read) -> GResult<Box<Self>> {
         Ok(Vec::read_bin(from)?.into_boxed_slice())
     }
 }
 
 impl<T: WriteBin + 'static> WriteBin for [T] {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         u32::write_bin(&value.len().try_into()?, to)?;
 
         if value.len() == 0 {
@@ -97,32 +97,32 @@ impl<T: WriteBin + 'static> WriteBin for [T] {
 }
 
 impl ReadBinBox for str {
-    fn read_bin_box(from: &mut impl Read) -> Result<Box<Self>, GenErr> {
+    fn read_bin_box(from: &mut impl Read) -> GResult<Box<Self>> {
         Ok(Box::from(str::from_utf8(Vec::read_bin(from)?.as_slice())?))
     }
 }
 
 impl WriteBin for str {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         WriteBin::write_bin(value.as_bytes(), to)
     }
 }
 
 impl ReadBin for String {
-    fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
+    fn read_bin(from: &mut impl Read) -> GResult<Self> {
         let buf = Vec::read_bin(from)?;
         Ok(Self::from_utf8(buf)?)
     }
 }
 
 impl WriteBin for String {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         WriteBin::write_bin(value.as_str(), to)
     }
 }
 
 impl<T: ReadBin + 'static> ReadBin for Vec<T> {
-    fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
+    fn read_bin(from: &mut impl Read) -> GResult<Self> {
         let len = u32::read_bin(from)? as usize;
 
         if len == 0 {
@@ -147,13 +147,13 @@ impl<T: ReadBin + 'static> ReadBin for Vec<T> {
 }
 
 impl<T: WriteBin + 'static> WriteBin for Vec<T> {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         WriteBin::write_bin(value.as_slice(), to)
     }
 }
 
 impl<T: ReadBin + 'static, const N: usize> ReadBin for [T; N] {
-    fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
+    fn read_bin(from: &mut impl Read) -> GResult<Self> {
         if N == 0 {
             // SAFETY: The length is 0, no initialization required.
             return Ok(unsafe { MaybeUninit::uninit().assume_init() });
@@ -179,7 +179,7 @@ impl<T: ReadBin + 'static, const N: usize> ReadBin for [T; N] {
 }
 
 impl<T: WriteBin + 'static, const N: usize> WriteBin for [T; N] {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         if N == 0 {
             return Ok(());
         }
@@ -198,25 +198,25 @@ impl<T: WriteBin + 'static, const N: usize> WriteBin for [T; N] {
 }
 
 impl<T: ReadBin> ReadBinBox for T {
-    fn read_bin_box(from: &mut impl Read) -> Result<Box<Self>, GenErr> {
+    fn read_bin_box(from: &mut impl Read) -> GResult<Box<Self>> {
         Ok(Box::new(Self::read_bin(from)?))
     }
 }
 
 impl<T: ReadBinBox + ?Sized> ReadBin for Box<T> {
-    fn read_bin(from: &mut impl Read) -> Result<Self, GenErr> {
+    fn read_bin(from: &mut impl Read) -> GResult<Self> {
         T::read_bin_box(from)
     }
 }
 
 impl<T: WriteBin + ?Sized> WriteBin for Box<T> {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         T::write_bin(value.as_ref(), to)
     }
 }
 
 impl<T: WriteBin + ?Sized> WriteBin for &T {
-    fn write_bin(value: &Self, to: &mut impl Write) -> Result<(), GenErr> {
+    fn write_bin(value: &Self, to: &mut impl Write) -> GResult<()> {
         T::write_bin(*value, to)
     }
 }
